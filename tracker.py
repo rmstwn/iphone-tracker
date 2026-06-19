@@ -1,6 +1,7 @@
 import os
 import requests
 import json
+import re  # Required for finding the price pattern
 from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
@@ -10,6 +11,7 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
+# Set to whatever you want to track
 TARGET_MODELS = ["iPhone 15 Pro", "1TB"]
 
 def send_discord(message):
@@ -36,31 +38,40 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # We start by finding the <h3> titles
-        product_elements = soup.find_all('h3', class_='rf-refurb-producttile-title') 
+        # Sticking exactly to the working method: raw <h3> tags
+        product_elements = soup.find_all('h3') 
         print(f"DEBUG: Found {len(product_elements)} <h3> tags on the page.")
         
         found_items = []
         for item in product_elements:
-            # Clean the text to handle the hidden &nbsp;
             text = item.get_text().replace('\xa0', ' ').strip()
             
             if all(model.lower() in text.lower() for model in TARGET_MODELS):
                 
-                # --- NEW PRICE EXTRACTION USING HTML CLASSES ---
+                # --- NEW PRICE FINDER (No Classes Required) ---
                 price = "Price not found"
+                parent = item.parent
                 
-                # Step 1: Find the parent <li> container that holds the whole product card
-                product_card = item.find_parent('li', class_='rf-refurb-producttile')
-                
-                if product_card:
-                    # Step 2: Find the specific span inside this card that holds the price
-                    price_span = product_card.find('span', class_='rf-refurb-producttile-currentprice')
-                    if price_span:
-                        price = price_span.get_text().strip()
-                # -----------------------------------------------
-                
-                # Format the text for Discord
+                # Climb up the HTML structure up to 5 levels to find the price block
+                for _ in range(5):
+                    if parent is None:
+                        break
+                    
+                    # Extract all text fragments in this section
+                    for string in parent.stripped_strings:
+                        # Look for numbers, commas, and the Yen symbol
+                        match = re.search(r'[\d,]+円', string)
+                        if match:
+                            price = match.group(0)
+                            break
+                            
+                    if price != "Price not found":
+                        break
+                        
+                    parent = parent.parent
+                # ----------------------------------------------
+
+                # Format the text nicely for Discord
                 final_item_text = f"📱 **{text}**\n💰 **Price:** {price}"
                 found_items.append(final_item_text)
                 print(f"DEBUG: MATCH FOUND -> {text} | {price}")

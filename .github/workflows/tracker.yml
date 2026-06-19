@@ -1,23 +1,18 @@
 name: Apple Refurb Tracker
-
 on:
+  workflow_dispatch:        # Allows manual triggering
   schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch:
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
 
 jobs:
   check:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - run: pip install -r requirements.txt
-
       - run: python tracker.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}

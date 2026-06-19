@@ -10,8 +10,7 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Set to whatever you want to track
-TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
+TARGET_MODELS = ["iPhone 15 Pro", "1TB"]
 
 def send_discord(message):
     try:
@@ -37,25 +36,40 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # We use <h3> again because this exists in the raw, non-JavaScript HTML
-        product_elements = soup.find_all('h3') 
+        # We start by finding the <h3> titles
+        product_elements = soup.find_all('h3', class_='rf-refurb-producttile-title') 
         print(f"DEBUG: Found {len(product_elements)} <h3> tags on the page.")
         
         found_items = []
         for item in product_elements:
-            # We keep the crucial \xa0 replacement to clean the hidden HTML spaces
+            # Clean the text to handle the hidden &nbsp;
             text = item.get_text().replace('\xa0', ' ').strip()
             
-            # Check if all keywords exist in the cleaned text
             if all(model.lower() in text.lower() for model in TARGET_MODELS):
-                found_items.append(text)
-                print(f"DEBUG: MATCH FOUND -> {text}")
+                
+                # --- NEW PRICE EXTRACTION USING HTML CLASSES ---
+                price = "Price not found"
+                
+                # Step 1: Find the parent <li> container that holds the whole product card
+                product_card = item.find_parent('li', class_='rf-refurb-producttile')
+                
+                if product_card:
+                    # Step 2: Find the specific span inside this card that holds the price
+                    price_span = product_card.find('span', class_='rf-refurb-producttile-currentprice')
+                    if price_span:
+                        price = price_span.get_text().strip()
+                # -----------------------------------------------
+                
+                # Format the text for Discord
+                final_item_text = f"📱 **{text}**\n💰 **Price:** {price}"
+                found_items.append(final_item_text)
+                print(f"DEBUG: MATCH FOUND -> {text} | {price}")
 
         cache = get_cache()
         
         if found_items:
             if cache.get("last_found") != found_items:
-                message = "🚨 Apple Refurbished Japan Update!\nFound:\n" + "\n".join(found_items) + f"\n\nLink: {URL}"
+                message = "🚨 **Apple Refurbished Japan Update!**\n\n" + "\n\n".join(found_items) + f"\n\n🔗 [Buy here]({URL})"
                 send_discord(message)
                 
                 with open(CACHE_FILE, "w") as f:

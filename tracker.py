@@ -11,7 +11,7 @@ HEADERS = {
 CACHE_FILE = "cache.json"
 
 # Target specific models
-TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
+TARGET_MODELS = ["iPhone 15 Pro", "1TB"]
 
 def send_discord(message):
     try:

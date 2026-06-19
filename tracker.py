@@ -10,7 +10,7 @@ HEADERS = {
 }
 
 KEYWORDS = [
-    "iPhone 15 Pro",
+    "iPhone 15",
 ]
 
 def send_discord(message):

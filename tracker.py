@@ -11,7 +11,7 @@ HEADERS = {
 CACHE_FILE = "cache.json"
 
 # Set to whatever you want to track
-TARGET_MODELS = ["iPhone 15", "128GB"]
+TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
 
 def send_discord(message):
     try:

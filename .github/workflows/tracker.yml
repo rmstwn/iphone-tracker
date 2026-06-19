@@ -21,9 +21,17 @@ jobs:
         with:
           python-version: "3.11"
       
-      - run: pip install requests
+      # Install both required libraries
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
       
-      - run: python tracker.py
+      # Ensure cache.json exists to avoid JSON decoding errors on first run
+      - name: Initialize cache if missing
+        run: |
+          if [ ! -f cache.json ]; then echo "{}" > cache.json; fi
+      
+      - name: Run tracker
+        run: python tracker.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
 

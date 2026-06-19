@@ -5,7 +5,7 @@ import json
 WEBHOOK_URL = os.environ["DISCORD_WEBHOOK"]
 URL = "https://www.apple.com/jp/shop/refurbished/iphone"
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-KEYWORDS = ["iPhone 15 Pro 128GB"]
+KEYWORDS = ["iPhone 15 Pro 1TB"]
 CACHE_FILE = "cache.json"
 
 def send_discord(message):

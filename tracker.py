@@ -19,11 +19,17 @@ try:
     html = response.text
     found = [k for k in KEYWORDS if k.lower() in html.lower()]
 
-    # Load cache
+    # Robust cache loading
     cache = {}
     if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, "r") as f:
-            cache = json.load(f)
+        try:
+            with open(CACHE_FILE, "r") as f:
+                content = f.read().strip() # Read the content
+                if content:                # Only try to parse if there is content
+                    cache = json.loads(content)
+        except json.JSONDecodeError:
+            # If the file is corrupted, start fresh
+            cache = {}
 
     # Notify only if there's a change
     if found and cache.get("last_found") != found:

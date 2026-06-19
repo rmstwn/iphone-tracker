@@ -10,7 +10,7 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Target specific models
+# Change "128GB" back to "1TB" if you want to test with current stock
 TARGET_MODELS = ["iPhone 15 Pro", "1TB"]
 
 def send_discord(message):
@@ -18,8 +18,6 @@ def send_discord(message):
         if WEBHOOK_URL:
             requests.post(WEBHOOK_URL, json={"content": message}, timeout=30)
             print("DEBUG: Discord message sent successfully.")
-        else:
-            print("DEBUG: WEBHOOK_URL is not set!")
     except Exception as e:
         print(f"Failed to send Discord message: {e}")
 
@@ -39,16 +37,16 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Look for h3 tags (common for product titles)
-        product_elements = soup.find_all('h3') 
-        print(f"DEBUG: Found {len(product_elements)} <h3> tags on the page.")
+        # UPDATE: Look for the exact <a> tag and class you found in the inspector
+        product_elements = soup.find_all('a', class_='rf-refurb-producttile-link') 
+        print(f"DEBUG: Found {len(product_elements)} product links on the page.")
         
         found_items = []
         for item in product_elements:
-            text = item.get_text().strip()
-            # If you want to see EVERY item it finds, uncomment the line below:
-            # print(f"DEBUG: Checking item: {text}") 
+            # UPDATE: Replace \xa0 (non-breaking space) with a normal space
+            text = item.get_text().replace('\xa0', ' ').strip()
             
+            # Check if all keywords exist in the cleaned text
             if all(model.lower() in text.lower() for model in TARGET_MODELS):
                 found_items.append(text)
                 print(f"DEBUG: MATCH FOUND -> {text}")
@@ -57,13 +55,13 @@ try:
         
         if found_items:
             if cache.get("last_found") != found_items:
-                message = "🚨 Apple Refurbished Japan Update!\nFound: " + ", ".join(found_items)
+                message = "🚨 Apple Refurbished Japan Update!\nFound: " + "\n".join(found_items) + f"\n{URL}"
                 send_discord(message)
                 
                 with open(CACHE_FILE, "w") as f:
                     json.dump({"last_found": found_items}, f)
             else:
-                print("DEBUG: Items found, but they are already in the cache. No message sent.")
+                print("DEBUG: Items found, but already in cache. No message sent.")
         else:
             print("DEBUG: No items matched the TARGET_MODELS criteria.")
             
@@ -71,6 +69,4 @@ try:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")
 
 except Exception as e:
-    error_msg = f"⚠️ Tracker Error: {e}"
-    print(error_msg)
-    send_discord(error_msg)
+    print(f"⚠️ Tracker Error: {e}")

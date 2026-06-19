@@ -10,7 +10,7 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Change "128GB" back to "1TB" if you want to test with current stock
+# Set to whatever you want to track
 TARGET_MODELS = ["iPhone 15 Pro", "1TB"]
 
 def send_discord(message):
@@ -37,13 +37,13 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # UPDATE: Look for the exact <a> tag and class you found in the inspector
-        product_elements = soup.find_all('a', class_='rf-refurb-producttile-link') 
-        print(f"DEBUG: Found {len(product_elements)} product links on the page.")
+        # We use <h3> again because this exists in the raw, non-JavaScript HTML
+        product_elements = soup.find_all('h3') 
+        print(f"DEBUG: Found {len(product_elements)} <h3> tags on the page.")
         
         found_items = []
         for item in product_elements:
-            # UPDATE: Replace \xa0 (non-breaking space) with a normal space
+            # We keep the crucial \xa0 replacement to clean the hidden HTML spaces
             text = item.get_text().replace('\xa0', ' ').strip()
             
             # Check if all keywords exist in the cleaned text
@@ -55,7 +55,7 @@ try:
         
         if found_items:
             if cache.get("last_found") != found_items:
-                message = "🚨 Apple Refurbished Japan Update!\nFound: " + "\n".join(found_items) + f"\n{URL}"
+                message = "🚨 Apple Refurbished Japan Update!\nFound:\n" + "\n".join(found_items) + f"\n\nLink: {URL}"
                 send_discord(message)
                 
                 with open(CACHE_FILE, "w") as f:

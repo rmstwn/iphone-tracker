@@ -47,8 +47,8 @@ try:
         for item in product_elements:
             text = item.get_text().replace('\xa0', ' ').strip()
             
-            # --- MODIFIED: New matching logic for Base Model AND (128GB OR 256GB) ---
-            is_correct_model = BASE_MODEL.lower() in text.lower()
+            # --- FIXED LOGIC: Must include "iPhone 15 Pro" but EXCLUDE "Max" ---
+            is_correct_model = (BASE_MODEL.lower() in text.lower()) and ("max" not in text.lower())
             is_target_storage = any(storage.lower() in text.lower() for storage in TARGET_STORAGES)
             
             if is_correct_model and is_target_storage:
@@ -62,9 +62,7 @@ try:
                     if parent is None:
                         break
                     
-                    # Extract all text fragments in this section
                     for string in parent.stripped_strings:
-                        # Look for numbers, commas, and the Yen symbol
                         match = re.search(r'[\d,]+円', string)
                         if match:
                             price = match.group(0)
@@ -80,7 +78,7 @@ try:
                 final_item_text = f"📱 **{text}**\n💰 **Price:** {price}"
                 found_items.append(final_item_text)
                 print(f"DEBUG: MATCH FOUND -> {text} | {price}")
-
+                
         cache = get_cache()
         
         if found_items:

@@ -12,8 +12,8 @@ HEADERS = {
 CACHE_FILE = "cache.json"
 
 # --- MODIFIED: Target conditions split into base model and storage options ---
-BASE_MODEL = "iPhone 15 Pro Max"
-TARGET_STORAGES = ["128GB", "256GB", "512GB", "1TB"]  # Add more storage options if needed
+BASE_MODEL = "iPhone 15 Pro"
+TARGET_STORAGES = ["128GB", "256GB", "512GB"]  # Add more storage options if needed
 
 def send_discord(message):
     try:

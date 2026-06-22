@@ -11,8 +11,9 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Set to whatever you want to track
-TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
+# --- MODIFIED: Target conditions split into base model and storage options ---
+BASE_MODEL = "iPhone 15 Pro"
+TARGET_STORAGES = ["128GB", "256GB"]
 
 def send_discord(message):
     try:
@@ -46,9 +47,13 @@ try:
         for item in product_elements:
             text = item.get_text().replace('\xa0', ' ').strip()
             
-            if all(model.lower() in text.lower() for model in TARGET_MODELS):
+            # --- MODIFIED: New matching logic for Base Model AND (128GB OR 256GB) ---
+            is_correct_model = BASE_MODEL.lower() in text.lower()
+            is_target_storage = any(storage.lower() in text.lower() for storage in TARGET_STORAGES)
+            
+            if is_correct_model and is_target_storage:
                 
-                # --- NEW PRICE FINDER (No Classes Required) ---
+                # --- PRICE FINDER (No Classes Required) ---
                 price = "Price not found"
                 parent = item.parent
                 
@@ -88,7 +93,7 @@ try:
             else:
                 print("DEBUG: Items found, but already in cache. No message sent.")
         else:
-            print("DEBUG: No items matched the TARGET_MODELS criteria.")
+            print("DEBUG: No items matched the filtering criteria.")
             
     else:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")

@@ -11,8 +11,9 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Set to whatever you want to track
-TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
+# --- NEW: Lists for multiple models and storages ---
+TARGET_MODELS = ["iPhone 15 Pro", "iPhone 16 Pro"]
+TARGET_STORAGES = ["128GB"] # You can add "256GB" or "512GB" here if you want!
 
 def send_discord(message):
     try:
@@ -45,10 +46,21 @@ try:
         found_items = []
         for item in product_elements:
             text = item.get_text().replace('\xa0', ' ').strip()
+            text_lower = text.lower()
             
-            if all(model.lower() in text.lower() for model in TARGET_MODELS):
+            # --- ADVANCED MATCHING LOGIC ---
+            # 1. Does the text contain ANY of our target models?
+            is_correct_model = any(model.lower() in text_lower for model in TARGET_MODELS)
+            
+            # 2. Does the text contain ANY of our target storage sizes?
+            is_target_storage = any(storage.lower() in text_lower for storage in TARGET_STORAGES)
+            
+            # 3. EXCLUDE the "Max" variant entirely
+            is_not_max = "max" not in text_lower
+            
+            if is_correct_model and is_target_storage and is_not_max:
                 
-                # --- NEW PRICE FINDER (No Classes Required) ---
+                # --- PRICE FINDER (No Classes Required) ---
                 price = "Price not found"
                 parent = item.parent
                 
@@ -88,7 +100,7 @@ try:
             else:
                 print("DEBUG: Items found, but already in cache. No message sent.")
         else:
-            print("DEBUG: No items matched the TARGET_MODELS criteria.")
+            print("DEBUG: No items matched the filtering criteria.")
             
     else:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")

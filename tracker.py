@@ -11,8 +11,9 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# Set to whatever you want to track
-TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
+# --- MODIFIED: Split target conditions into lists for multiple models and storage options ---
+TARGET_MODELS = ["iPhone 15 Pro", "iPhone 16 Pro"]
+TARGET_STORAGES = ["128GB", "256GB", "512GB"]  # Add more storage options if needed
 
 def send_discord(message):
     try:
@@ -46,7 +47,11 @@ try:
         for item in product_elements:
             text = item.get_text().replace('\xa0', ' ').strip()
             
-            if all(model.lower() in text.lower() for model in TARGET_MODELS):
+            # --- MODIFIED: Checks if ANY target model matches, while explicitly EXCLUDING "Max" ---
+            is_correct_model = any(model.lower() in text.lower() for model in TARGET_MODELS) and ("max" not in text.lower())
+            is_target_storage = any(storage.lower() in text.lower() for storage in TARGET_STORAGES)
+            
+            if is_correct_model and is_target_storage:
                 
                 # --- PRICE FINDER (No Classes Required) ---
                 price = "Price not found"

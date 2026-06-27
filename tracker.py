@@ -11,9 +11,8 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# --- NEW: Lists for multiple models and storages ---
-TARGET_MODELS = ["iPhone 15 Pro", "iPhone 16 Pro"]
-TARGET_STORAGES = ["128GB"] # You can add "256GB" or "512GB" here if you want!
+# Set to whatever you want to track
+TARGET_MODELS = ["iPhone 15 Pro", "128GB"]
 
 def send_discord(message):
     try:
@@ -46,19 +45,8 @@ try:
         found_items = []
         for item in product_elements:
             text = item.get_text().replace('\xa0', ' ').strip()
-            text_lower = text.lower()
             
-            # --- ADVANCED MATCHING LOGIC ---
-            # 1. Does the text contain ANY of our target models?
-            is_correct_model = any(model.lower() in text_lower for model in TARGET_MODELS)
-            
-            # 2. Does the text contain ANY of our target storage sizes?
-            is_target_storage = any(storage.lower() in text_lower for storage in TARGET_STORAGES)
-            
-            # 3. EXCLUDE the "Max" variant entirely
-            is_not_max = "max" not in text_lower
-            
-            if is_correct_model and is_target_storage and is_not_max:
+            if all(model.lower() in text.lower() for model in TARGET_MODELS):
                 
                 # --- PRICE FINDER (No Classes Required) ---
                 price = "Price not found"
@@ -69,9 +57,7 @@ try:
                     if parent is None:
                         break
                     
-                    # Extract all text fragments in this section
                     for string in parent.stripped_strings:
-                        # Look for numbers, commas, and the Yen symbol
                         match = re.search(r'[\d,]+円', string)
                         if match:
                             price = match.group(0)
@@ -87,7 +73,7 @@ try:
                 final_item_text = f"📱 **{text}**\n💰 **Price:** {price}"
                 found_items.append(final_item_text)
                 print(f"DEBUG: MATCH FOUND -> {text} | {price}")
-
+                
         cache = get_cache()
         
         if found_items:

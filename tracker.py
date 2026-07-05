@@ -11,7 +11,11 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
+# --- EASY CONFIGURATION ZONE ---
+# Keep these completely lowercase and spaceless!
+TARGET_MODELS = ["iphone15pro", "iphone16pro"]
 TARGET_STORAGES = ["128gb", "256gb", "512gb"]
+# -------------------------------
 
 def send_discord(message):
     try:
@@ -35,25 +39,25 @@ def get_previously_seen_keys(cache, current_products):
         return set(cache["seen_keys"])
     return set()
 
+# Generates a foolproof unique ID for deduplication
+def generate_unique_key(name):
+    return name.lower().replace(" ", "").replace("\xa0", "").replace(" ", "")
+
 # --- THE BULLETPROOF MATCHER ---
 def matches_target(name):
-    # 1. Lowercase everything
-    lower_name = name.lower()
+    spaceless = generate_unique_key(name)
     
-    # 2. Remove ALL standard spaces, non-breaking spaces, and Japanese wide-spaces
-    # This prevents Apple's weird formatting from breaking the script.
-    spaceless = lower_name.replace(" ", "").replace("\xa0", "").replace(" ", "")
-    
-    # 3. Exclude Max and Plus
+    # 1. Exclude Max and Plus models instantly
     if "max" in spaceless or "plus" in spaceless:
         return False
         
-    # 4. Must be either 15 Pro or 16 Pro
-    if "iphone15pro" not in spaceless and "iphone16pro" not in spaceless:
-        return False
-        
-    # 5. Must match your target storage sizes
-    return any(storage in spaceless for storage in TARGET_STORAGES)
+    # 2. Check if the spaceless text contains ANY of your target models
+    is_target_model = any(model in spaceless for model in TARGET_MODELS)
+    
+    # 3. Check if the spaceless text contains ANY of your target storages
+    is_target_storage = any(storage in spaceless for storage in TARGET_STORAGES)
+    
+    return is_target_model and is_target_storage
 # -------------------------------
 
 def format_price(price):
@@ -83,13 +87,11 @@ def parse_json_ld_products(soup):
             continue
             
         offers = data.get("offers", [])
+        unique_key = generate_unique_key(name)
         
-        # Use the name as the key to prevent duplicate Discord messages
-        key = name 
-        
-        products[key] = {
-            "key": key,
-            "name": name,
+        products[unique_key] = {
+            "key": unique_key,
+            "name": re.sub(r"\s+", " ", name.replace("\xa0", " ")).strip(),
             "price": extract_price(offers),
         }
     return products
@@ -100,8 +102,6 @@ def parse_h3_products(soup):
     for h3 in soup.find_all("h3"):
         link = h3.find("a")
         text = link.get_text() if link else h3.get_text()
-        
-        # Clean up the text visually for your Discord alert
         display_text = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
         
         if not display_text or not matches_target(display_text):
@@ -121,13 +121,15 @@ def parse_h3_products(soup):
                 break
             parent = parent.parent
 
-        products[display_text] = {"key": display_text, "name": display_text, "price": price}
+        unique_key = generate_unique_key(display_text)
+        products[unique_key] = {"key": unique_key, "name": display_text, "price": price}
+        
     return products
 
 def find_target_products(soup):
     products = parse_json_ld_products(soup)
     for key, product in parse_h3_products(soup).items():
-        products.setdefault(key, product)
+        products[key] = product
     return list(products.values())
 
 try:
@@ -159,12 +161,13 @@ try:
             send_discord(message)
 
             with open(CACHE_FILE, "w") as f:
-                json.dump({"seen_keys": sorted(current_keys)}, f)
+                json.dump({"seen_keys": sorted(list(current_keys))}, f)
+                
         elif found_products:
             print("DEBUG: Items found, but all already in cache. No message sent.")
             if current_keys != previously_seen:
                 with open(CACHE_FILE, "w") as f:
-                    json.dump({"seen_keys": sorted(current_keys)}, f)
+                    json.dump({"seen_keys": sorted(list(current_keys))}, f)
         else:
             print("DEBUG: No items matched the filtering criteria.")
             if previously_seen:

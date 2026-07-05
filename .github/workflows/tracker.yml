@@ -10,34 +10,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Restore cache from previous run
-      - name: Restore cache
-        uses: actions/cache@v4
-        with:
-          path: cache.json
-          key: ${{ runner.os }}-cache
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       
-      # Install both required libraries
       - name: Install dependencies
         run: pip install requests beautifulsoup4
-      
-      # Ensure cache.json exists to avoid JSON decoding errors on first run
-      - name: Initialize cache if missing
-        run: |
-          if [ ! -f cache.json ]; then echo "{}" > cache.json; fi
       
       - name: Run tracker
         run: python tracker.py
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-
-      # Save cache for next run
-      - name: Save cache
-        uses: actions/cache@v4
-        with:
-          path: cache.json
-          key: ${{ runner.os }}-cache

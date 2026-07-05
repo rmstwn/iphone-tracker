@@ -9,11 +9,10 @@ URL = "https://www.apple.com/jp/shop/refurbished/iphone"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
-CACHE_FILE = "cache.json"
 
 # --- EASY CONFIGURATION ZONE ---
 TARGET_MODELS = ["iphone15pro", "iphone16pro"]
-TARGET_STORAGES = ["128gb", "256gb", "512gb", "1tb"] # Added 1TB just in case!
+TARGET_STORAGES = ["128gb", "256gb", "512gb", "1tb"]
 # -------------------------------
 
 def send_discord(message):
@@ -24,26 +23,13 @@ def send_discord(message):
     except Exception as e:
         print(f"Failed to send Discord message: {e}")
 
-def get_cache():
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                return json.load(f)
-        except (json.JSONDecodeError, ValueError):
-            return {}
-    return {}
-
-def get_previously_seen_keys(cache, current_products):
-    if "seen_keys" in cache:
-        return set(cache["seen_keys"])
-    return set()
-
 def generate_unique_key(name):
     return name.lower().replace(" ", "").replace("\xa0", "").replace(" ", "")
 
 def matches_target(name):
     spaceless = generate_unique_key(name)
     
+    # Exclude Max and Plus instantly
     if "max" in spaceless or "plus" in spaceless:
         return False
         
@@ -75,7 +61,7 @@ def parse_json_ld_products(soup):
             continue
             
         name = data.get("name", "")
-        if not name:
+        if not name or not matches_target(name):
             continue
             
         unique_key = generate_unique_key(name)
@@ -94,11 +80,8 @@ def parse_h3_products(soup):
         text = link.get_text() if link else h3.get_text()
         display_text = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
         
-        if not display_text:
+        if not display_text or not matches_target(display_text):
             continue
-            
-        # 👁️ X-RAY VISION: This prints EVERYTHING the scraper sees!
-        print(f"👁️ RAW SCRAPE: {display_text}")
 
         price = "Price not found"
         parent = h3.parent
@@ -120,18 +103,10 @@ def parse_h3_products(soup):
     return products
 
 def find_target_products(soup):
-    # Get everything from the page
-    all_products = parse_json_ld_products(soup)
+    products = parse_json_ld_products(soup)
     for key, product in parse_h3_products(soup).items():
-        all_products[key] = product
-        
-    # Filter only the targets
-    filtered_products = []
-    for product in all_products.values():
-        if matches_target(product['name']):
-            filtered_products.append(product)
-            
-    return filtered_products
+        products[key] = product
+    return list(products.values())
 
 try:
     print(f"DEBUG: Fetching URL: {URL}")
@@ -140,40 +115,31 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, "html.parser")
         found_products = find_target_products(soup)
-        print(f"DEBUG: Found {len(found_products)} matching target product(s).")
+        print(f"DEBUG: Found {len(found_products)} matching product(s).")
 
-        cache = get_cache()
-        previously_seen = get_previously_seen_keys(cache, found_products)
-        current_keys = {product["key"] for product in found_products}
-        new_products = [p for p in found_products if p["key"] not in previously_seen]
-
-        if new_products:
+        # --- CACHE-FREE ALERT LOGIC ---
+        if found_products:
+            # Format the list of products for Discord
             found_items = [
-                f"📱 **{p['name']}**\n💰 **Price:** {p['price']}" for p in new_products
+                f"📱 **{p['name']}**\n💰 **Price:** {p['price']}" for p in found_products
             ]
+            
+            # Send the message immediately, every single time
             message = (
                 "🚨 **Apple Refurbished Japan Update!**\n\n"
                 + "\n\n".join(found_items)
                 + f"\n\n🔗 [Buy here]({URL})"
             )
             send_discord(message)
-
-            with open(CACHE_FILE, "w") as f:
-                json.dump({"seen_keys": sorted(list(current_keys))}, f)
+            
+            for p in found_products:
+                print(f"DEBUG: MATCH FOUND AND SENT -> {p['name']} | {p['price']}")
                 
-        elif found_products:
-            print("DEBUG: Items found, but all already in cache. No message sent.")
-            if current_keys != previously_seen:
-                with open(CACHE_FILE, "w") as f:
-                    json.dump({"seen_keys": sorted(list(current_keys))}, f)
         else:
-            print("DEBUG: No target items currently listed.")
-            if previously_seen:
-                with open(CACHE_FILE, "w") as f:
-                    json.dump({"seen_keys": []}, f)
-
+            print("DEBUG: No items matched the filtering criteria.")
+            
     else:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")
 
 except Exception as e:
-    print(f"⚠️ Tracker Error: {e} ")
+    print(f"⚠️ Tracker Error: {e}")

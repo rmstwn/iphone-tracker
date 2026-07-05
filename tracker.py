@@ -176,4 +176,4 @@ try:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")
 
 except Exception as e:
-    print(f"⚠️ Tracker Error: {e}")
+    print(f"⚠️ Tracker Error: {e} ")

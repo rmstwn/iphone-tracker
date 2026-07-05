@@ -1,7 +1,7 @@
 import os
 import requests
 import json
-import re  # Required for finding the price pattern
+import re
 from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
@@ -11,9 +11,12 @@ HEADERS = {
 }
 CACHE_FILE = "cache.json"
 
-# --- MODIFIED: Split target conditions into lists for multiple models and storage options ---
-TARGET_MODELS = ["iPhone 15 Pro", "iPhone 16 Pro"]
-TARGET_STORAGES = ["128GB", "256GB", "512GB"]  # Add more storage options if needed
+TARGET_STORAGES = ["128GB", "256GB", "512GB"]
+
+# Match iPhone 15/16 Pro but not Pro Max or Plus (handles Apple's non-breaking spaces)
+MODEL_PATTERN = re.compile(r"iphone\s+(?:15|16)\s+pro(?:\s|$|-|\d)", re.IGNORECASE)
+PRO_MAX_OR_PLUS = re.compile(r"pro\s*max|\bplus\b", re.IGNORECASE)
+
 
 def send_discord(message):
     try:
@@ -22,6 +25,7 @@ def send_discord(message):
             print("DEBUG: Discord message sent successfully.")
     except Exception as e:
         print(f"Failed to send Discord message: {e}")
+
 
 def get_cache():
     if os.path.exists(CACHE_FILE):
@@ -32,67 +36,164 @@ def get_cache():
             return {}
     return {}
 
+
+def get_previously_seen_keys(cache, current_products):
+    if "seen_keys" in cache:
+        return set(cache["seen_keys"])
+
+    # Migrate old list-based cache (product names embedded in Discord message text)
+    seen_names = set()
+    for item in cache.get("last_found", []):
+        match = re.search(r"\*\*(.+?)\*\*", item)
+        if match:
+            seen_names.add(normalize_text(match.group(1)))
+
+    if not seen_names:
+        return set()
+
+    return {
+        product["key"]
+        for product in current_products
+        if product["name"] in seen_names
+    }
+
+
+def normalize_text(text):
+    return re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
+
+
+def matches_target(name):
+    normalized = normalize_text(name)
+    lower = normalized.lower()
+    if PRO_MAX_OR_PLUS.search(lower):
+        return False
+    if not MODEL_PATTERN.search(lower):
+        return False
+    return any(storage.lower() in lower for storage in TARGET_STORAGES)
+
+
+def format_price(price):
+    if isinstance(price, (int, float)):
+        return f"{int(price):,}円"
+    return str(price)
+
+
+def extract_price(offers):
+    if isinstance(offers, list) and offers:
+        offers = offers[0]
+    if isinstance(offers, dict) and offers.get("price") is not None:
+        return format_price(offers["price"])
+    return "Price not found"
+
+
+def extract_sku(offers, fallback):
+    if isinstance(offers, list) and offers:
+        offers = offers[0]
+    if isinstance(offers, dict) and offers.get("sku"):
+        return offers["sku"]
+    return fallback
+
+
+def parse_json_ld_products(soup):
+    products = {}
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            data = json.loads(script.string)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if data.get("@type") != "Product":
+            continue
+        name = normalize_text(data.get("name", ""))
+        if not name or not matches_target(name):
+            continue
+        offers = data.get("offers", [])
+        key = extract_sku(offers, name)
+        products[key] = {
+            "key": key,
+            "name": name,
+            "price": extract_price(offers),
+        }
+    return products
+
+
+def parse_h3_products(soup):
+    products = {}
+    grid = soup.select_one(".rf-refurb-category-grid-no-js")
+    if not grid:
+        return products
+
+    for h3 in grid.find_all("h3"):
+        link = h3.find("a")
+        text = normalize_text(link.get_text() if link else h3.get_text())
+        if not text or not matches_target(text):
+            continue
+
+        price = "Price not found"
+        parent = h3.parent
+        for _ in range(5):
+            if parent is None:
+                break
+            for string in parent.stripped_strings:
+                match = re.search(r"[\d,]+円", string)
+                if match:
+                    price = match.group(0)
+                    break
+            if price != "Price not found":
+                break
+            parent = parent.parent
+
+        products[text] = {"key": text, "name": text, "price": price}
+    return products
+
+
+def find_target_products(soup):
+    products = parse_json_ld_products(soup)
+    for key, product in parse_h3_products(soup).items():
+        products.setdefault(key, product)
+    return list(products.values())
+
+
 try:
     print(f"DEBUG: Fetching URL: {URL}")
     response = requests.get(URL, headers=HEADERS, timeout=30)
-    
-    if response.status_code == 200:
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Sticking exactly to the working method: raw <h3> tags
-        product_elements = soup.find_all('h3') 
-        print(f"DEBUG: Found {len(product_elements)} <h3> tags on the page.")
-        
-        found_items = []
-        for item in product_elements:
-            text = item.get_text().replace('\xa0', ' ').strip()
-            
-            # --- MODIFIED: Checks if ANY target model matches, while explicitly EXCLUDING "Max" ---
-            is_correct_model = any(model.lower() in text.lower() for model in TARGET_MODELS) and ("max" not in text.lower())
-            is_target_storage = any(storage.lower() in text.lower() for storage in TARGET_STORAGES)
-            
-            if is_correct_model and is_target_storage:
-                
-                # --- PRICE FINDER (No Classes Required) ---
-                price = "Price not found"
-                parent = item.parent
-                
-                # Climb up the HTML structure up to 5 levels to find the price block
-                for _ in range(5):
-                    if parent is None:
-                        break
-                    
-                    for string in parent.stripped_strings:
-                        match = re.search(r'[\d,]+円', string)
-                        if match:
-                            price = match.group(0)
-                            break
-                            
-                    if price != "Price not found":
-                        break
-                        
-                    parent = parent.parent
-                # ----------------------------------------------
 
-                # Format the text nicely for Discord
-                final_item_text = f"📱 **{text}**\n💰 **Price:** {price}"
-                found_items.append(final_item_text)
-                print(f"DEBUG: MATCH FOUND -> {text} | {price}")
-                
+    if response.status_code == 200:
+        soup = BeautifulSoup(response.text, "html.parser")
+        found_products = find_target_products(soup)
+        print(f"DEBUG: Found {len(found_products)} matching product(s).")
+
+        for product in found_products:
+            print(f"DEBUG: MATCH FOUND -> {product['name']} | {product['price']}")
+
         cache = get_cache()
-        
-        if found_items:
-            if cache.get("last_found") != found_items:
-                message = "🚨 **Apple Refurbished Japan Update!**\n\n" + "\n\n".join(found_items) + f"\n\n🔗 [Buy here]({URL})"
-                send_discord(message)
-                
+        previously_seen = get_previously_seen_keys(cache, found_products)
+        current_keys = {product["key"] for product in found_products}
+        new_products = [p for p in found_products if p["key"] not in previously_seen]
+
+        if new_products:
+            found_items = [
+                f"📱 **{p['name']}**\n💰 **Price:** {p['price']}" for p in new_products
+            ]
+            message = (
+                "🚨 **Apple Refurbished Japan Update!**\n\n"
+                + "\n\n".join(found_items)
+                + f"\n\n🔗 [Buy here]({URL})"
+            )
+            send_discord(message)
+
+            with open(CACHE_FILE, "w") as f:
+                json.dump({"seen_keys": sorted(current_keys)}, f)
+        elif found_products:
+            print("DEBUG: Items found, but all already in cache. No message sent.")
+            if current_keys != previously_seen:
                 with open(CACHE_FILE, "w") as f:
-                    json.dump({"last_found": found_items}, f)
-            else:
-                print("DEBUG: Items found, but already in cache. No message sent.")
+                    json.dump({"seen_keys": sorted(current_keys)}, f)
         else:
             print("DEBUG: No items matched the filtering criteria.")
-            
+            if previously_seen:
+                with open(CACHE_FILE, "w") as f:
+                    json.dump({"seen_keys": []}, f)
+
     else:
         print(f"DEBUG: Failed to retrieve page. Status code: {response.status_code}")
 

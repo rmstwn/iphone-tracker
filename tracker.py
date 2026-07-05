@@ -2,6 +2,7 @@ import os
 import requests
 import json
 import re
+import time  # NEW: Required for the cache-buster
 from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
@@ -29,7 +30,6 @@ def generate_unique_key(name):
 def matches_target(name):
     spaceless = generate_unique_key(name)
     
-    # Exclude Max and Plus instantly
     if "max" in spaceless or "plus" in spaceless:
         return False
         
@@ -72,19 +72,20 @@ def parse_json_ld_products(soup):
         }
     return products
 
-def parse_h3_products(soup):
+# --- UPGRADED: Now searches H2, H3, and H4 tags ---
+def parse_html_products(soup):
     products = {}
     
-    for h3 in soup.find_all("h3"):
-        link = h3.find("a")
-        text = link.get_text() if link else h3.get_text()
+    for tag in soup.find_all(['h2', 'h3', 'h4']):
+        link = tag.find("a")
+        text = link.get_text() if link else tag.get_text()
         display_text = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
         
         if not display_text or not matches_target(display_text):
             continue
 
         price = "Price not found"
-        parent = h3.parent
+        parent = tag.parent
         for _ in range(5):
             if parent is None:
                 break
@@ -104,27 +105,27 @@ def parse_h3_products(soup):
 
 def find_target_products(soup):
     products = parse_json_ld_products(soup)
-    for key, product in parse_h3_products(soup).items():
+    for key, product in parse_html_products(soup).items():
         products[key] = product
     return list(products.values())
 
 try:
-    print(f"DEBUG: Fetching URL: {URL}")
-    response = requests.get(URL, headers=HEADERS, timeout=30)
+    # --- UPGRADED: Cache Buster appended to the URL ---
+    cache_buster_url = f"{URL}?_={int(time.time())}"
+    print(f"DEBUG: Fetching URL: {cache_buster_url}")
+    
+    response = requests.get(cache_buster_url, headers=HEADERS, timeout=30)
 
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, "html.parser")
         found_products = find_target_products(soup)
         print(f"DEBUG: Found {len(found_products)} matching product(s).")
 
-        # --- CACHE-FREE ALERT LOGIC ---
         if found_products:
-            # Format the list of products for Discord
             found_items = [
                 f"📱 **{p['name']}**\n💰 **Price:** {p['price']}" for p in found_products
             ]
             
-            # Send the message immediately, every single time
             message = (
                 "🚨 **Apple Refurbished Japan Update!**\n\n"
                 + "\n\n".join(found_items)

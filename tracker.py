@@ -41,7 +41,7 @@ def get_previously_seen_keys(cache, current_products):
     if "seen_keys" in cache:
         return set(cache["seen_keys"])
 
-    # Migrate old list-based cache (product names embedded in Discord message text)
+    # Migrate old list-based cache
     seen_names = set()
     for item in cache.get("last_found", []):
         match = re.search(r"\*\*(.+?)\*\*", item)
@@ -86,14 +86,6 @@ def extract_price(offers):
     return "Price not found"
 
 
-def extract_sku(offers, fallback):
-    if isinstance(offers, list) and offers:
-        offers = offers[0]
-    if isinstance(offers, dict) and offers.get("sku"):
-        return offers["sku"]
-    return fallback
-
-
 def parse_json_ld_products(soup):
     products = {}
     for script in soup.find_all("script", type="application/ld+json"):
@@ -103,11 +95,16 @@ def parse_json_ld_products(soup):
             continue
         if data.get("@type") != "Product":
             continue
+            
         name = normalize_text(data.get("name", ""))
         if not name or not matches_target(name):
             continue
+            
         offers = data.get("offers", [])
-        key = extract_sku(offers, name)
+        
+        # FIX 2: Use the product name as the key to prevent duplicates
+        key = name 
+        
         products[key] = {
             "key": key,
             "name": name,
@@ -118,11 +115,9 @@ def parse_json_ld_products(soup):
 
 def parse_h3_products(soup):
     products = {}
-    grid = soup.select_one(".rf-refurb-category-grid-no-js")
-    if not grid:
-        return products
-
-    for h3 in grid.find_all("h3"):
+    
+    # FIX 1: Search all h3 tags on the entire page, bypassing the single-grid limitation
+    for h3 in soup.find_all("h3"):
         link = h3.find("a")
         text = normalize_text(link.get_text() if link else h3.get_text())
         if not text or not matches_target(text):

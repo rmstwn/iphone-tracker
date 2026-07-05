@@ -12,9 +12,8 @@ HEADERS = {
 CACHE_FILE = "cache.json"
 
 # --- EASY CONFIGURATION ZONE ---
-# Keep these completely lowercase and spaceless!
 TARGET_MODELS = ["iphone15pro", "iphone16pro"]
-TARGET_STORAGES = ["128gb", "256gb", "512gb"]
+TARGET_STORAGES = ["128gb", "256gb", "512gb", "1tb"] # Added 1TB just in case!
 # -------------------------------
 
 def send_discord(message):
@@ -39,26 +38,19 @@ def get_previously_seen_keys(cache, current_products):
         return set(cache["seen_keys"])
     return set()
 
-# Generates a foolproof unique ID for deduplication
 def generate_unique_key(name):
     return name.lower().replace(" ", "").replace("\xa0", "").replace(" ", "")
 
-# --- THE BULLETPROOF MATCHER ---
 def matches_target(name):
     spaceless = generate_unique_key(name)
     
-    # 1. Exclude Max and Plus models instantly
     if "max" in spaceless or "plus" in spaceless:
         return False
         
-    # 2. Check if the spaceless text contains ANY of your target models
     is_target_model = any(model in spaceless for model in TARGET_MODELS)
-    
-    # 3. Check if the spaceless text contains ANY of your target storages
     is_target_storage = any(storage in spaceless for storage in TARGET_STORAGES)
     
     return is_target_model and is_target_storage
-# -------------------------------
 
 def format_price(price):
     if isinstance(price, (int, float)):
@@ -83,16 +75,14 @@ def parse_json_ld_products(soup):
             continue
             
         name = data.get("name", "")
-        if not name or not matches_target(name):
+        if not name:
             continue
             
-        offers = data.get("offers", [])
         unique_key = generate_unique_key(name)
-        
         products[unique_key] = {
             "key": unique_key,
             "name": re.sub(r"\s+", " ", name.replace("\xa0", " ")).strip(),
-            "price": extract_price(offers),
+            "price": extract_price(data.get("offers", [])),
         }
     return products
 
@@ -104,8 +94,11 @@ def parse_h3_products(soup):
         text = link.get_text() if link else h3.get_text()
         display_text = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
         
-        if not display_text or not matches_target(display_text):
+        if not display_text:
             continue
+            
+        # 👁️ X-RAY VISION: This prints EVERYTHING the scraper sees!
+        print(f"👁️ RAW SCRAPE: {display_text}")
 
         price = "Price not found"
         parent = h3.parent
@@ -127,10 +120,18 @@ def parse_h3_products(soup):
     return products
 
 def find_target_products(soup):
-    products = parse_json_ld_products(soup)
+    # Get everything from the page
+    all_products = parse_json_ld_products(soup)
     for key, product in parse_h3_products(soup).items():
-        products[key] = product
-    return list(products.values())
+        all_products[key] = product
+        
+    # Filter only the targets
+    filtered_products = []
+    for product in all_products.values():
+        if matches_target(product['name']):
+            filtered_products.append(product)
+            
+    return filtered_products
 
 try:
     print(f"DEBUG: Fetching URL: {URL}")
@@ -139,10 +140,7 @@ try:
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, "html.parser")
         found_products = find_target_products(soup)
-        print(f"DEBUG: Found {len(found_products)} matching product(s).")
-
-        for product in found_products:
-            print(f"DEBUG: MATCH FOUND -> {product['name']} | {product['price']}")
+        print(f"DEBUG: Found {len(found_products)} matching target product(s).")
 
         cache = get_cache()
         previously_seen = get_previously_seen_keys(cache, found_products)
@@ -169,7 +167,7 @@ try:
                 with open(CACHE_FILE, "w") as f:
                     json.dump({"seen_keys": sorted(list(current_keys))}, f)
         else:
-            print("DEBUG: No items matched the filtering criteria.")
+            print("DEBUG: No target items currently listed.")
             if previously_seen:
                 with open(CACHE_FILE, "w") as f:
                     json.dump({"seen_keys": []}, f)

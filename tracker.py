@@ -16,8 +16,8 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-TARGET_MODELS = ["iphone16pro"]
-TARGET_STORAGES = ["128gb", "256gb"]
+TARGET_MODELS = ["iphone15pro", "iphone16pro"]
+TARGET_STORAGES = ["256gb"]
 
 def send_discord(message):
     try:

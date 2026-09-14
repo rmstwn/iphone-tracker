@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 
 WEBHOOK_URL = os.environ.get("DISCORD_WEBHOOK")
 
-# --- THE DIRECT LINK ATTACK ---
 URLS = [
     "https://www.apple.com/jp/shop/refurbished/watch/apple-watch-series-11",
     "https://www.apple.com/jp/shop/refurbished/watch" 
@@ -16,9 +15,8 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-# --- EXACT TARGET CONFIGURATION ---
 TARGET_MODELS = ["applewatchseries11"]
-TARGET_VARIANTS = ["gps+cellularモデル"] 
+TARGET_VARIANTS = ["cellular"] 
 
 def send_discord(message):
     try:
@@ -39,12 +37,11 @@ def matches_target(name):
     
     return is_target_model and is_target_variant
 
-# --- ONLY VISIBLE HTML ALLOWED ---
 def parse_html_products(soup):
     products = {}
     
-    for h3 in soup.find_all(['h2', 'h3', 'h4']):
-        link = h3.find("a")
+    for tag in soup.find_all(['h2', 'h3', 'h4']):
+        link = tag.find("a")
         
         if not link:
             continue
@@ -52,12 +49,14 @@ def parse_html_products(soup):
         text = link.get_text()
         display_text = re.sub(r"\s+", " ", text.replace("\xa0", " ")).strip()
         
+        print(f"👁️ RAW SCRAPE: {display_text}")
+        
         if not display_text or not matches_target(display_text):
             continue
 
         price = "Price not found"
         
-        for next_node in h3.find_all_next(string=True):
+        for next_node in tag.find_all_next(string=True):
             if getattr(next_node.parent, 'name', '') in ['h2', 'h3', 'h4']:
                 break
                 
@@ -93,7 +92,6 @@ try:
         else:
             print(f"DEBUG: Failed to retrieve {base_url}. Status: {response.status_code}")
             
-    # --- SEND THE DISCORD ALERT ---
     final_products = list(master_found_products.values())
     print(f"DEBUG: Grand Total Found: {len(final_products)} target product(s).")
 

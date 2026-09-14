@@ -18,7 +18,7 @@ HEADERS = {
 
 # --- EXACT TARGET CONFIGURATION ---
 TARGET_MODELS = ["applewatchseries11"]
-TARGET_VARIANTS = ["cellular"] 
+TARGET_VARIANTS = ["gps"] 
 
 def send_discord(message):
     try:
@@ -34,6 +34,10 @@ def generate_unique_key(name):
 def matches_target(name):
     spaceless = generate_unique_key(name)
     
+    # --- STRICT EXCLUSION: Block Cellular models instantly ---
+    if "cellular" in spaceless:
+        return False
+        
     is_target_model = any(model in spaceless for model in TARGET_MODELS)
     is_target_variant = any(variant in spaceless for variant in TARGET_VARIANTS)
     
